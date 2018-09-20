@@ -1,2 +1,5 @@
-data.txt
+*.txt
 .DS_Store
+.idea
+colab.ipynb
+__pycache__

@@ -2,8 +2,9 @@ import numpy as np
 from tools import read_data
 
 HIDDEN_LAYER_SIZE = 100
-CHUNK_SIZE = 40  # number of steps on input to unroll the RNN
+CHUNK_SIZE = 25  # number of steps on input to unroll the RNN
 LEARNING_RATE = 1e-1
+THRESHOLD = 5
 LOG_ITER = 1000
 
 w_xh, w_hh, w_hy, b_h, b_y = [None]*5
@@ -30,7 +31,7 @@ def predict(h_state, prefix_ids, predict_n):
     :return: predicted output string
     """
 
-    predicted_on_prefix = []
+    # predicted_on_prefix = []
     h = h_state
     x = np.zeros((vocab_size, 1))
 
@@ -38,13 +39,13 @@ def predict(h_state, prefix_ids, predict_n):
         x = np.zeros((vocab_size, 1))
         x[idx] = 1
         h = np.tanh(np.dot(w_xh, x) + np.dot(w_hh, h) + b_h)
-        y = np.dot(w_hy, h) + b_y
-        p = np.exp(y) / np.sum(np.exp(y))
-        o_idx = np.random.choice(range(vocab_size), p=p.ravel())
-        predicted_on_prefix.append(o_idx)
+        # y = np.dot(w_hy, h) + b_y
+        # p = np.exp(y) / np.sum(np.exp(y))
+        # o_idx = np.random.choice(range(vocab_size), p=p.ravel())
+        # predicted_on_prefix.append(o_idx)
 
-    predicted_on_prefix_str = [char_at[o_idx] for o_idx in predicted_on_prefix]
-    print('predicted_on_prefix_str: ', predicted_on_prefix_str)
+    # predicted_on_prefix_str = [char_at[o_idx] for o_idx in predicted_on_prefix]
+    # print('predicted_on_prefix_str: ', predicted_on_prefix_str)
 
     predicted = []
     for t in range(predict_n):
@@ -57,7 +58,7 @@ def predict(h_state, prefix_ids, predict_n):
         predicted.append(o_idx)
 
     predicted_str = [char_at[o_idx] for o_idx in predicted]
-    print('predicted_str: ', predicted_str)
+    # print('predicted_str: ', predicted_str)
 
     return predicted_str
 
@@ -105,7 +106,7 @@ def gradients_and_loss(inputs, targets, h_state):
         d_h_next = np.dot(w_hh.T, d_h_raw)
 
     for d_param in [d_w_xh, d_w_hh, d_w_hy, d_b_h, d_b_y]:
-        np.clip(d_param, -5, 5, out=d_param)  # to mitigate exploding gradients
+        np.clip(d_param, -THRESHOLD, THRESHOLD, out=d_param)  # to mitigate exploding gradients
 
     return loss, d_w_xh, d_w_hh, d_w_hy, d_b_h, d_b_y, h[len(inputs)-1]
 
@@ -136,13 +137,15 @@ def execute_rnn():
         targets = [id_of[c] for c in data[pointer + 1: pointer + CHUNK_SIZE + 1]]  # targets : p + 1 ... p + chunk size
 
         if iteration % LOG_ITER == 0:
-            print(prefix, ' ', ''.join(predict(h_state, prefix_ids, predict_char_nums)))
+            print(prefix, ''.join(predict(h_state, prefix_ids, predict_char_nums)))
 
         loss, d_w_xh, d_w_hh, d_w_hy, d_b_h, d_b_y, h_state = gradients_and_loss(inputs, targets, h_state)
         smooth_loss = smooth_loss * .999 + loss * .001
 
         if iteration % LOG_ITER == 0:
-            print('whole iter %d, iter %d, loss: %f' % (whole_input_iteration, iteration, smooth_loss), '\n\n')
+            print('---------------------------------------------\n',
+                  'whole iter %d, iter %d, loss: %f' % (whole_input_iteration, iteration, smooth_loss),
+                  '\n---------------------------------------------\n\n')
 
         for param, d_param, sg_param in zip([w_xh, w_hh, w_hy, b_h, b_y],
                                             [d_w_xh, d_w_hh, d_w_hy, d_b_h, d_b_y],
@@ -156,14 +159,14 @@ def execute_rnn():
 
 
 if __name__ == '__main__':
-    data, char_vocab = read_data()
+    data, char_vocab = read_data('shakespeare -all.txt')
     data_size, vocab_size = len(data), len(char_vocab)
     id_of = {c: i for i, c in enumerate(char_vocab)}
     char_at = {i: c for i, c in enumerate(char_vocab)}
 
-    prefix = 'First Citi'
+    prefix = 'A thousand favours'
     prefix_ids = [id_of[c] for c in prefix]
-    predict_char_nums = 20
+    predict_char_nums = 100
 
     initialize_rnn()
     execute_rnn()
