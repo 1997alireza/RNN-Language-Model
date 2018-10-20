@@ -1,8 +1,9 @@
 import random
 import time
-from char_level.utils import *
+from LSTM_tensorflow.tools import *
 import tensorflow as tf
 import os
+
 
 class LSTM_NN:
 
@@ -185,7 +186,9 @@ def train(model, data, batch_size=64, time_steps=200, NUM_TRAIN_BATCHES=20000):
             ))
 
             saver.save(sess, check_point)
+
 #todo: data beshe array az sentenceha. random nabashe va har kodum jomalat ro bede. padding va hazf tu jomalat(size sabet). start and end token
+
 
 def predict(prefix, model, vocab, generate_len):
     prefix = prefix.lower()
@@ -202,15 +205,16 @@ def predict(prefix, model, vocab, generate_len):
     print(gen_str)
 
 
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-sess = tf.InteractiveSession(config=config)
+if __name__ == '__main__':
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    sess = tf.InteractiveSession(config=config)
 
-char_num_of_sentence = 100
-data = load_data("../datasets/shakespear/data.txt", char_num_of_sentence)
-exit()
-model = LSTM_NN(SIZE_OF_VOCAB, 256, 2, SIZE_OF_VOCAB, sess, './saved')
-train(model, data)
-# model = load_model('./saved')
-#
-# predict('I am ', model, vocab, 500)
+    char_num_of_sentence = 100
+    data = load_data('../datasets/shakespeare -all.txt', char_num_of_sentence)
+    exit()
+    model = LSTM_NN(SIZE_OF_VOCAB, 256, 2, SIZE_OF_VOCAB, sess, './saved')
+    train(model, data)
+    # model = load_model('./saved')
+    #
+    # predict('I am ', model, vocab, 500)

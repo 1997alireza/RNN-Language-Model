@@ -1,5 +1,6 @@
 import numpy as np
-from tools import read_data
+# from tools import read_data
+from RNN_numpy.tools import read_data
 
 HIDDEN_LAYER_SIZE = 100
 CHUNK_SIZE = 25  # number of steps on input to unroll the RNN
@@ -159,7 +160,7 @@ def execute_rnn():
 
 
 if __name__ == '__main__':
-    data, char_vocab = read_data('shakespeare -all.txt')
+    data, char_vocab = read_data('datasets/sample.txt')
     data_size, vocab_size = len(data), len(char_vocab)
     id_of = {c: i for i, c in enumerate(char_vocab)}
     char_at = {i: c for i, c in enumerate(char_vocab)}

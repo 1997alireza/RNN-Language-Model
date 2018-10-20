@@ -32,7 +32,7 @@ def map_id_to_char(code):
     return '<?>'
 
 
-def convert_to_one_hot_old(data_, vocab): # todo: delete ir
+def convert_to_one_hot_old(data_, vocab):  # todo: delete this function
     data = np.zeros((len(data_), len(vocab)))
     for cnt, s in enumerate(data_):
         v = [0.0] * len(vocab)
@@ -67,7 +67,8 @@ def load_data(input, char_num_of_sentence):
     for line_id, line in enumerate(lines):
         line = line.lower()[0:char_num_of_sentence-2]
         line += ' ' * (char_num_of_sentence-2 - len(line))
-        data[line_id] = convert_to_one_hot(line)
+        data[line_id] = convert_to_one_hot(line, char_num_of_sentence)
 
+    print(data)
     # Convert to 1-hot coding
     return data
