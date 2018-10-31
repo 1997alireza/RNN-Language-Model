@@ -164,8 +164,9 @@ if __name__ == '__main__':
     data_size, vocab_size = len(data), len(char_vocab)
     id_of = {c: i for i, c in enumerate(char_vocab)}
     char_at = {i: c for i, c in enumerate(char_vocab)}
+    # TODO: add unknown to vocab
 
-    prefix = 'A thousand favours'
+    prefix = 'In Warwickshire'
     prefix_ids = [id_of[c] for c in prefix]
     predict_char_nums = 100
 

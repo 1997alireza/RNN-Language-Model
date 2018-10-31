@@ -1,4 +1,3 @@
-import random
 import time
 from LSTM_tensorflow.tools import *
 import tensorflow as tf
@@ -7,33 +6,34 @@ import os
 
 class LSTM_NN:
 
-    def __init__(self, in_size, hidden_size, num_layers, out_size, session, check_point_dir, lr=0.003, scope_name="RNN"):
+    def __init__(self, session, check_point_dir, hidden_size=256, num_layers=2, lr=0.003,
+                 scope_name="RNN"):
         self.scope = scope_name
-        self.in_size = in_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.out_size = out_size
         self.session = session
         self.lr = tf.constant(lr)
         self.check_point_dir = check_point_dir
 
-
-        ## Defining the computational graph
+        # Defining the computational graph
 
         self.lstm_last_state = np.zeros(
             (self.num_layers * 2 * self.hidden_size,)
+            # num_layer * 2 (one for h and one for c) * hidden_size
         )
         with tf.variable_scope(self.scope):
-            self.input_placeholder = tf.placeholder(
+            self.x_batch = tf.placeholder(
                 tf.float32,
-                shape=(None, None, self.in_size),
+                shape=(None, CHAR_NUM_OF_SENTENCE, SIZE_OF_VOCAB),
                 name="input"
             )
             self.lstm_init_value = tf.placeholder(
                 tf.float32,
                 shape=(None, self.num_layers * 2 * self.hidden_size),
+                # None -> number of sentences in this batch
                 name="lstm_init_value"
             )
+
             # LSTM
             self.lstm_cells = [
                 tf.contrib.rnn.BasicLSTMCell(
@@ -48,20 +48,21 @@ class LSTM_NN:
             )
             outputs, self.lstm_new_state = tf.nn.dynamic_rnn(
                 self.lstm,
-                self.input_placeholder,
+                self.x_batch,
                 initial_state=self.lstm_init_value,
                 dtype=tf.float32
             )
-            ## fc layer at the end
+            # fc layer at the end
             self.W = tf.Variable(
                 tf.random_normal(
-                    (self.hidden_size, self.out_size),
+                    (self.hidden_size, SIZE_OF_VOCAB),
                     stddev=0.01
                 )
             )
             self.B = tf.Variable(
                 tf.random_normal(
-                    (self.out_size,), stddev=0.01
+                    (SIZE_OF_VOCAB,), stddev=0.01
+                    # size : SIZE_OF_VOCAB (1d)
                 )
             )
             outputs_reshaped = tf.reshape(outputs, [-1, self.hidden_size])
@@ -69,28 +70,49 @@ class LSTM_NN:
                 outputs_reshaped,
                 self.W
             ) + self.B
+
             batch_time_shape = tf.shape(outputs)
             self.final_outputs = tf.reshape(
                 tf.nn.softmax(network_output),
-                (batch_time_shape[0], batch_time_shape[1], self.out_size)
+                (batch_time_shape[0], batch_time_shape[1], SIZE_OF_VOCAB)
             )
 
             self.y_batch = tf.placeholder(
                 tf.float32,
-                (None, None, self.out_size)
+                (None, None, SIZE_OF_VOCAB)
             )
-            y_batch_long = tf.reshape(self.y_batch, [-1, self.out_size])
+            y_batch_long = tf.reshape(self.y_batch, [-1, SIZE_OF_VOCAB])
             self.cost = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits(
                     logits=network_output,
                     labels=y_batch_long
                 )
             )
-            ## minimizing the error
+            # minimizing the error
             self.train_op = tf.train.RMSPropOptimizer(
                 self.lr,
                 0.9
             ).minimize(self.cost)
+
+    def train_on_batch(self, x_batch, y_batch):
+        """
+
+        :param x_batch: size=(batch_size, char_num_of_sentence, SIZE_OF_VOCAB)
+        :param y_batch: size=(batch_size, char_num_of_sentence, SIZE_OF_VOCAB)
+        :return:
+        """
+        init_value = np.zeros(
+            (x_batch.shape[0], self.num_layers * 2 * self.hidden_size)
+        )
+        cost, _ = self.session.run(
+            [self.cost, self.train_op],
+            feed_dict={
+                self.x_batch: x_batch,
+                self.y_batch: y_batch,
+                self.lstm_init_value: init_value
+            }
+        )
+        return cost
 
     def run_step(self, x, init_zero_state=True):
         if init_zero_state:
@@ -100,45 +122,24 @@ class LSTM_NN:
         out, next_lstm_state = self.session.run(
             [self.final_outputs, self.lstm_new_state],
             feed_dict={
-                self.input_placeholder: [x],
+                self.x_batch: [x],  # todo: chotor mishe? mage 3d nbud?
                 self.lstm_init_value: [init_value]
             }
         )
         self.lstm_last_state = next_lstm_state[0]
+        print("OUT:", out)
+        #  todo: check whats the out?
         return out[0][0]
-
-    def train_on_batch(self, xbatch, ybatch):
-        init_value = np.zeros(
-            (xbatch.shape[0], self.num_layers * 2 * self.hidden_size)
-        )
-        cost, _ = self.session.run(
-            [self.cost, self.train_op],
-            feed_dict={
-                self.input_placeholder: xbatch,
-                self.y_batch: ybatch,
-                self.lstm_init_value: init_value
-            }
-        )
-        return cost
 
 
 def load_model(check_point_dir):
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.InteractiveSession(config=config)
-    in_size = 39
-    out_size = 39
-    lstm_size = 256
-    num_layers = 2
 
     net = LSTM_NN(
         check_point_dir=check_point_dir,
-        in_size=in_size,
-        hidden_size=lstm_size,
-        num_layers=num_layers,
-        out_size=out_size,
         session=sess,
-        lr=0.003,
         scope_name="char_rnn_network"
     )
     check_point = check_point_dir + '\model.ckpt'
@@ -149,51 +150,62 @@ def load_model(check_point_dir):
     return net
 
 
-def train(model, data, batch_size=64, time_steps=200, NUM_TRAIN_BATCHES=20000):
+def train(model, data, batch_size=64, time_steps=200, num_train_batches=20000):
     # data, vocab = load_data(input_file)
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = model.session
-    in_size = out_size = model.in_size
-    net = model
+    print("y1")
     sess.run(tf.global_variables_initializer())
     saver = tf.train.Saver(tf.global_variables())
     check_point = model.check_point_dir + '\model.ckpt'
+
     last_time = time.time()
-    batch = np.zeros((batch_size, time_steps, in_size))
-    batch_y = np.zeros((batch_size, time_steps, in_size))
-    possible_batch_ids = range(data.shape[0] - time_steps - 1)
 
-    for i in range(NUM_TRAIN_BATCHES):
-        # Sample time_steps consecutive samples from the dataset text file
-        batch_id = random.sample(possible_batch_ids, batch_size)
+    np_start_token = [0.0] * SIZE_OF_VOCAB
+    np_start_token[START] = 1.0
+    np_end_token = [0.0] * SIZE_OF_VOCAB
+    np_end_token[END] = 1.0
 
-        for j in range(time_steps):
-            ind1 = [k + j for k in batch_id]
-            ind2 = [k + j + 1 for k in batch_id]
+    batch_size = len(data)
+    print(batch_size)
 
-            batch[:, j, :] = data[ind1, :]
-            batch_y[:, j, :] = data[ind2, :]
+    print("y2")
+    for i in range(num_train_batches):
+        x_batch = np.zeros((batch_size, CHAR_NUM_OF_SENTENCE, SIZE_OF_VOCAB))
+        y_batch = np.zeros((batch_size, CHAR_NUM_OF_SENTENCE, SIZE_OF_VOCAB))
 
-        cost = net.train_on_batch(batch, batch_y)
+        print("ii", i)
+        for batch_id in range(batch_size):
+            print(np.shape(np_start_token))
+            print(np.shape(np_end_token))
+            print(np.shape(data))
+            print(np.shape(data[batch_id]))
+            x_batch[batch_id] = np.append([np_start_token], data[batch_id], axis=0)
+            y_batch[batch_id] = np.append(data[batch_id], [np_end_token], axis=0)
+
+        print("  x")
+        batch_cost = model.train_on_batch(x_batch, y_batch)
+        print("  y")
 
         if (i % 100) == 0:
             new_time = time.time()
             diff = new_time - last_time
             last_time = new_time
-            print("mini batch: {}  loss: {}  speed: {} batches / s".format(
-                i, cost, 100 / diff
+            print("batch: {}  loss: {}  speed: {} batches / s".format(
+                i, batch_cost, 100 / diff
             ))
 
             saver.save(sess, check_point)
 
-#todo: data beshe array az sentenceha. random nabashe va har kodum jomalat ro bede. padding va hazf tu jomalat(size sabet). start and end token
 
+# TODO: change state to be a tuple
+# todo: don't find the 1. find the max
 
-def predict(prefix, model, vocab, generate_len):
-    prefix = prefix.lower()
+def predict(prefix, model, generate_len):#TODO
+    """prefix = prefix.lower()
     for i in range(len(prefix)):
-        out = model.run_step(convert_to_one_hot_old(prefix[i], vocab))
+        out = model.run_step(convert_to_one_hot_old(prefix[i], vocab)) # todo: lidi
 
     print("Sentence:")
     gen_str = prefix
@@ -202,19 +214,22 @@ def predict(prefix, model, vocab, generate_len):
         gen_str += vocab[element]
         out = model.run_step(convert_to_one_hot_old(vocab[element], vocab), False)
 
-    print(gen_str)
+    print(gen_str)"""
 
 
 if __name__ == '__main__':
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.InteractiveSession(config=config)
+    saver_directory = './saved'
 
-    char_num_of_sentence = 100
-    data = load_data('../datasets/shakespeare -all.txt', char_num_of_sentence)
-    exit()
-    model = LSTM_NN(SIZE_OF_VOCAB, 256, 2, SIZE_OF_VOCAB, sess, './saved')
-    train(model, data)
-    # model = load_model('./saved')
-    #
-    # predict('I am ', model, vocab, 500)
+    CHAR_NUM_OF_SENTENCE = 100
+    data = load_data('../datasets/shakespeare -all.txt', CHAR_NUM_OF_SENTENCE)
+
+    test = False
+    if not test:
+        model = LSTM_NN(sess, saver_directory)
+        train(model, data)
+    else:
+        model = load_model(saver_directory)
+        predict('I am ', model, 500)

@@ -18,10 +18,6 @@ def convert_to_one_hot(data_, vocab):
     return data
 
 
-def decode_embed(array, vocab):
-    return vocab[array.index(1)]
-
-
 def load_data(input):
     # Load the data
     data_ = ""

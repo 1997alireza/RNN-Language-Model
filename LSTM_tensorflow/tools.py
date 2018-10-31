@@ -1,10 +1,6 @@
 import numpy as np
 
 
-def decode_embed(array, vocab):
-    return vocab[array.index(1)]
-
-
 # main characters: 0-127 = 0-127
 # persian characters: (char code) 1560-1751 <-> (id) 128-319
 # <start> = 320, <end> = 321, <unk> = 322
@@ -15,6 +11,10 @@ SIZE_OF_VOCAB = 323
 
 
 def map_char_to_id(c):
+    """
+
+    :return: a number between 0 to 319 or 322
+    """
     code = ord(c)
     if code < 128:
         return code
@@ -24,6 +24,10 @@ def map_char_to_id(c):
 
 
 def map_id_to_char(code):
+    """
+
+    :param code: a number between 0 to 322
+    """
     if code == START: return '<START>'
     if code == END: return '<END>'
     if code == UNK: return '<UNK>'
@@ -42,33 +46,36 @@ def convert_to_one_hot_old(data_, vocab):  # todo: delete this function
     return data
 
 
-def convert_to_one_hot(sentence, char_num_of_sentence):
-    s_vector = np.zeros((char_num_of_sentence, SIZE_OF_VOCAB))
-    for char_id, charac in enumerate(sentence):
-        v = [0.0] * SIZE_OF_VOCAB
-        v[map_char_to_id(charac)] = 1.0
-        s_vector[char_id+1] = v
+def convert_to_one_hot(sentence, char_num):
+    """
 
-    v = [0.0] * SIZE_OF_VOCAB
-    v[START] = 1.0
-    s_vector[0] = v
-    v = [0.0] * SIZE_OF_VOCAB
-    v[END] = 1.0
-    s_vector[char_num_of_sentence-1] = v
+    :param char_num: char_num_of_sentence-1
+    :return: it's the one-hot array of the sentence without start and end token
+    """
+    s_vector = np.zeros((char_num, SIZE_OF_VOCAB))
+    for char_id, char_c in enumerate(sentence):
+        v = [0.0] * SIZE_OF_VOCAB
+        v[map_char_to_id(char_c)] = 1.0
+        s_vector[char_id] = v
 
     return s_vector
 
 
 def load_data(input, char_num_of_sentence):
+    """
+
+    :param input: data file address
+    :param char_num_of_sentence: fix char size of any sentences
+    :return: a numpy array with the size (len(lines), char_num_of_sentence-1, SIZE_OF_VOCAB)
+    """
     # Load the data
     with open(input, 'r') as f:
         lines = f.readlines()
-    data = np.zeros((len(lines), char_num_of_sentence, SIZE_OF_VOCAB))
+    data = np.zeros((len(lines), char_num_of_sentence-1, SIZE_OF_VOCAB))
     for line_id, line in enumerate(lines):
-        line = line.lower()[0:char_num_of_sentence-2]
-        line += ' ' * (char_num_of_sentence-2 - len(line))
-        data[line_id] = convert_to_one_hot(line, char_num_of_sentence)
+        line = line.lower()[0:char_num_of_sentence-1]
+        line += ' ' * (char_num_of_sentence-1 - len(line))
 
-    print(data)
-    # Convert to 1-hot coding
+        # Convert to 1-hot coding
+        data[line_id] = convert_to_one_hot(line, char_num_of_sentence-1)
     return data
