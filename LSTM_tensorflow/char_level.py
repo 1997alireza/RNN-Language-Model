@@ -150,12 +150,11 @@ def load_model(check_point_dir):
     return net
 
 
-def train(model, data, batch_size=64, time_steps=200, num_train_batches=20000):
-    # data, vocab = load_data(input_file)
+def train(model, data, mini_batch_size=64, num_train_batches=20000):
+    print("'''TRAINING started'''")
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = model.session
-    print("y1")
     sess.run(tf.global_variables_initializer())
     saver = tf.train.Saver(tf.global_variables())
     check_point = model.check_point_dir + '\model.ckpt'
@@ -168,42 +167,44 @@ def train(model, data, batch_size=64, time_steps=200, num_train_batches=20000):
     np_end_token[END] = 1.0
 
     batch_size = len(data)
-    print(batch_size)
+    whole_train_iter = 0
+    mini_batch_iter = 0
+    train_iter = 0
 
-    print("y2")
-    for i in range(num_train_batches):
-        x_batch = np.zeros((batch_size, CHAR_NUM_OF_SENTENCE, SIZE_OF_VOCAB))
-        y_batch = np.zeros((batch_size, CHAR_NUM_OF_SENTENCE, SIZE_OF_VOCAB))
+    while whole_train_iter < num_train_batches:
+        x_batch = np.zeros((mini_batch_size, CHAR_NUM_OF_SENTENCE, SIZE_OF_VOCAB))
+        y_batch = np.zeros((mini_batch_size, CHAR_NUM_OF_SENTENCE, SIZE_OF_VOCAB))
 
-        print("ii", i)
-        for batch_id in range(batch_size):
-            print(np.shape(np_start_token))
-            print(np.shape(np_end_token))
-            print(np.shape(data))
-            print(np.shape(data[batch_id]))
-            x_batch[batch_id] = np.append([np_start_token], data[batch_id], axis=0)
-            y_batch[batch_id] = np.append(data[batch_id], [np_end_token], axis=0)
+        for mini_batch_id in range(0, mini_batch_size):
+            batch_id = (mini_batch_id + mini_batch_iter) % batch_size
+            x_batch[mini_batch_id] = np.append([np_start_token], data[batch_id], axis=0)
+            y_batch[mini_batch_id] = np.append(data[batch_id], [np_end_token], axis=0)
 
-        print("  x")
         batch_cost = model.train_on_batch(x_batch, y_batch)
-        print("  y")
+        train_iter += 1
 
-        if (i % 100) == 0:
+        print("     ---whole train iteration: {}    mini batch iteration: {}".format(whole_train_iter, mini_batch_iter))
+
+        if train_iter % 100 == 0:
             new_time = time.time()
             diff = new_time - last_time
             last_time = new_time
-            print("batch: {}  loss: {}  speed: {} batches / s".format(
-                i, batch_cost, 100 / diff
+            print("train iteration: {}  loss: {}  speed: {} batches / s".format(
+                whole_train_iter, batch_cost, 100 / diff
             ))
-
             saver.save(sess, check_point)
+
+        mini_batch_iter += mini_batch_size
+        if mini_batch_iter >= batch_size:
+            mini_batch_iter -= batch_size
+            whole_train_iter += 1
 
 
 # TODO: change state to be a tuple
 # todo: don't find the 1. find the max
 
 def predict(prefix, model, generate_len):#TODO
-    """prefix = prefix.lower()
+    prefix = prefix.lower()
     for i in range(len(prefix)):
         out = model.run_step(convert_to_one_hot_old(prefix[i], vocab)) # todo: lidi
 
@@ -214,7 +215,7 @@ def predict(prefix, model, generate_len):#TODO
         gen_str += vocab[element]
         out = model.run_step(convert_to_one_hot_old(vocab[element], vocab), False)
 
-    print(gen_str)"""
+    print(gen_str)
 
 
 if __name__ == '__main__':
