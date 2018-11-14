@@ -1,49 +1,38 @@
 import numpy as np
 
-
-# main characters: 0-127 = 0-127
-# persian characters: (char code) 1560-1751 <-> (id) 128-319
-# <start> = 320, <end> = 321, <unk> = 322
-START = 320
-END = 321
-UNK = 322
-SIZE_OF_VOCAB = 323
+# <start> = 0, <end> = 1, <unk> = 2
+# main characters: 3-127 = 3-127
+# --persian characters: (char code) 1560-1751 <-> (id) 128-319
+START = 0
+END = 1
+UNK = 2
+SIZE_OF_VOCAB = 128
 
 
 def map_char_to_id(c):
     """
 
-    :return: a number between 0 to 319 or 322
+    :return: a number between 0 to 127
     """
     code = ord(c)
-    if code < 128:
+    if 2 < code < 128:
         return code
-    if 1560 <= code <= 1751:
-        return code - 1432
+    # if 1560 <= code <= 1751:
+    #     return code - 1432
     return UNK
 
 
 def map_id_to_char(code):
     """
 
-    :param code: a number between 0 to 322
+    :param code: a number between 0 to SIZE_OF_VOCAB-1
     """
     if code == START: return '<START>'
     if code == END: return '<END>'
     if code == UNK: return '<UNK>'
     if code < 128: return chr(code)
-    if 128 <= code <= 319: return chr(code + 1432)
+    # if 128 <= code <= 319: return chr(code + 1432)
     return '<?>'
-
-
-def convert_to_one_hot_old(data_, vocab):  # todo: delete this function
-    data = np.zeros((len(data_), len(vocab)))
-    for cnt, s in enumerate(data_):
-        v = [0.0] * len(vocab)
-        print(s)
-        v[vocab.index(s)] = 1.0
-        data[cnt, :] = v
-    return data
 
 
 def convert_to_one_hot(sentence, char_num):
@@ -53,12 +42,23 @@ def convert_to_one_hot(sentence, char_num):
     :return: it's the one-hot array of the sentence without start and end token
     """
     s_vector = np.zeros((char_num, SIZE_OF_VOCAB))
-    for char_id, char_c in enumerate(sentence):
-        v = [0.0] * SIZE_OF_VOCAB
-        v[map_char_to_id(char_c)] = 1.0
-        s_vector[char_id] = v
+    for char_iter, char_c in enumerate(sentence):
+        v = get_char_vector(char_c)
+        s_vector[char_iter] = v
 
     return s_vector
+
+
+def get_char_vector(char):
+    v = [0.0] * SIZE_OF_VOCAB
+    v[map_char_to_id(char)] = 1.0
+    return v
+
+
+def get_one_hot_vector(one_id, size=SIZE_OF_VOCAB):
+    v = [0.0] * size
+    v[one_id] = 1.0
+    return v
 
 
 def load_data(input, char_num_of_sentence):

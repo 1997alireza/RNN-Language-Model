@@ -24,7 +24,8 @@ class LSTM_NN:
         with tf.variable_scope(self.scope):
             self.x_batch = tf.placeholder(
                 tf.float32,
-                shape=(None, CHAR_NUM_OF_SENTENCE, SIZE_OF_VOCAB),
+                shape=(None, None, SIZE_OF_VOCAB),
+                # None, None -> number of sentences in this batch, CHAR_NUM_OF_SENTENCE
                 name="input"
             )
             self.lstm_init_value = tf.placeholder(
@@ -39,12 +40,12 @@ class LSTM_NN:
                 tf.contrib.rnn.BasicLSTMCell(
                     self.hidden_size,
                     forget_bias=1.0,
-                    state_is_tuple=False
+                    state_is_tuple=True
                 ) for _ in range(self.num_layers)
             ]
             self.lstm = tf.contrib.rnn.MultiRNNCell(
                 self.lstm_cells,
-                state_is_tuple=False
+                state_is_tuple=True
             )
             outputs, self.lstm_new_state = tf.nn.dynamic_rnn(
                 self.lstm,
@@ -114,7 +115,7 @@ class LSTM_NN:
         )
         return cost
 
-    def run_step(self, x, init_zero_state=True):
+    def run_step(self, x, init_zero_state=False):
         if init_zero_state:
             init_value = np.zeros((self.num_layers * 2 * self.hidden_size,))
         else:
@@ -122,14 +123,12 @@ class LSTM_NN:
         out, next_lstm_state = self.session.run(
             [self.final_outputs, self.lstm_new_state],
             feed_dict={
-                self.x_batch: [x],  # todo: chotor mishe? mage 3d nbud?
+                self.x_batch: [x],
                 self.lstm_init_value: [init_value]
             }
         )
         self.lstm_last_state = next_lstm_state[0]
-        print("OUT:", out)
-        #  todo: check whats the out?
-        return out[0][0]
+        return out[0][0]  # it shows the next character that is predicted
 
 
 def load_model(check_point_dir):
@@ -142,7 +141,7 @@ def load_model(check_point_dir):
         session=sess,
         scope_name="char_rnn_network"
     )
-    check_point = check_point_dir + '\model.ckpt'
+    check_point = check_point_dir + '/model.ckpt'
     sess.run(tf.global_variables_initializer())
     saver = tf.train.Saver(tf.global_variables())
     if os.path.exists(check_point):
@@ -150,14 +149,14 @@ def load_model(check_point_dir):
     return net
 
 
-def train(model, data, mini_batch_size=64, num_train_batches=20000):
+def train(model, data, mini_batch_size=64, num_train_batches=20000, log_period=100):
     print("'''TRAINING started'''")
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = model.session
     sess.run(tf.global_variables_initializer())
     saver = tf.train.Saver(tf.global_variables())
-    check_point = model.check_point_dir + '\model.ckpt'
+    check_point = model.check_point_dir + '/model.ckpt'
 
     last_time = time.time()
 
@@ -185,7 +184,7 @@ def train(model, data, mini_batch_size=64, num_train_batches=20000):
 
         print("     ---whole train iteration: {}    mini batch iteration: {}".format(whole_train_iter, mini_batch_iter))
 
-        if train_iter % 100 == 0:
+        if train_iter % log_period == 0:
             new_time = time.time()
             diff = new_time - last_time
             last_time = new_time
@@ -193,6 +192,7 @@ def train(model, data, mini_batch_size=64, num_train_batches=20000):
                 whole_train_iter, batch_cost, 100 / diff
             ))
             saver.save(sess, check_point)
+            print('saved in this path: ', check_point)
 
         mini_batch_iter += mini_batch_size
         if mini_batch_iter >= batch_size:
@@ -201,19 +201,24 @@ def train(model, data, mini_batch_size=64, num_train_batches=20000):
 
 
 # TODO: change state to be a tuple
-# todo: don't find the 1. find the max
 
-def predict(prefix, model, generate_len):#TODO
+def predict(prefix, model, generate_len=100):
     prefix = prefix.lower()
-    for i in range(len(prefix)):
-        out = model.run_step(convert_to_one_hot_old(prefix[i], vocab)) # todo: lidi
+    if len(prefix) == 0:
+        first_char = map_id_to_char(np.random.choice(range(SIZE_OF_VOCAB)))
+    else:
+        first_char = prefix[0]
+    out = model.run_step([get_char_vector(first_char)], True)
+    for i in range(1, len(prefix)):
+        out = model.run_step([get_char_vector(prefix[i])])
 
     print("Sentence:")
     gen_str = prefix
     for i in range(generate_len):
-        element = np.random.choice(range(len(vocab)), p=out)
-        gen_str += vocab[element]
-        out = model.run_step(convert_to_one_hot_old(vocab[element], vocab), False)
+        element_id = np.random.choice(range(SIZE_OF_VOCAB), p=out)
+        element = map_id_to_char(element_id)
+        gen_str += element
+        out = model.run_step([get_one_hot_vector(element_id)])
 
     print(gen_str)
 
@@ -222,9 +227,10 @@ if __name__ == '__main__':
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.InteractiveSession(config=config)
-    saver_directory = './saved'
+    saver_directory = os.path.abspath(os.path.join(os.getcwd(), '../.saved'))
 
     CHAR_NUM_OF_SENTENCE = 100
+
     data = load_data('../datasets/shakespeare -all.txt', CHAR_NUM_OF_SENTENCE)
 
     test = False
