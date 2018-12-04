@@ -17,10 +17,31 @@ class LSTM_NN:
 
         # Defining the computational graph
 
-        self.lstm_last_state = np.zeros(
-            (self.num_layers * 2 * self.hidden_size,)
-            # num_layer * 2 (one for h and one for c) * hidden_size
+        # type 0 -> is not tuple (use in non-tuple mode)
+        # self.lstm_last_state = np.zeros(
+        #     (self.num_layers * 2 * self.hidden_size,)
+        #     # num_layer * 2 (one for h and one for c) * hidden_size
+        # )
+
+        # type 1 -> wrong
+        # self.lstm_last_state = [
+        #     np.zeros(
+        #         (self.num_layers * self.hidden_size,)),
+        #     np.zeros(
+        #         (self.num_layers * self.hidden_size,))
+        #
+        # ]
+
+        # type 2
+        self.lstm_last_state = tuple(
+            [
+                tf.nn.rnn_cell.LSTMStateTuple(
+                    np.zeros((1, self.hidden_size)),
+                    np.zeros((1, self.hidden_size))
+                ) for _ in range(self.num_layers)
+            ]
         )
+
         with tf.variable_scope(self.scope):
             self.x_batch = tf.placeholder(
                 tf.float32,
@@ -28,11 +49,37 @@ class LSTM_NN:
                 # None, None -> number of sentences in this batch, CHAR_NUM_OF_SENTENCE
                 name="input"
             )
-            self.lstm_init_value = tf.placeholder(
-                tf.float32,
-                shape=(None, self.num_layers * 2 * self.hidden_size),
-                # None -> number of sentences in this batch
-                name="lstm_init_value"
+            # type 0 -> is not tuple (use in non-tuple mode)
+            # self.lstm_init_value = tf.placeholder(
+            #     tf.float32,
+            #     shape=(None, self.num_layers * 2 * self.hidden_size),
+            #     # None -> number of sentences in this batch
+            #     name="lstm_init_value"
+            # )
+
+            # type 1 -> wrong
+            # self.c_layer = tf.placeholder(
+            #     tf.float32,
+            #     shape=[None, self.num_layers * self.hidden_size],
+            #     name='c_layer'
+            # )
+            #
+            # self.h_layer = tf.placeholder(
+            #     tf.float32,
+            #     shape=[None, self.num_layers * self.hidden_size],
+            #     name='h_layer'
+            # )
+            #
+            # self.lstm_init_value = tf.nn.rnn_cell.LSTMStateTuple(self.c_layer, self.h_layer)
+
+            # type 2
+            self.lstm_init_value = tuple(
+                [
+                    tf.nn.rnn_cell.LSTMStateTuple(
+                        tf.placeholder(tf.float32, shape=[None, self.hidden_size], name='c_layer' + str(l_id)),
+                        tf.placeholder(tf.float32, shape=[None, self.hidden_size], name='h_layer' + str(l_id)),
+                    ) for l_id in range(self.num_layers)
+                ]
             )
 
             # LSTM
@@ -47,6 +94,7 @@ class LSTM_NN:
                 self.lstm_cells,
                 state_is_tuple=True
             )
+
             outputs, self.lstm_new_state = tf.nn.dynamic_rnn(
                 self.lstm,
                 self.x_batch,
@@ -102,9 +150,32 @@ class LSTM_NN:
         :param y_batch: size=(batch_size, char_num_of_sentence, SIZE_OF_VOCAB)
         :return:
         """
-        init_value = np.zeros(
-            (x_batch.shape[0], self.num_layers * 2 * self.hidden_size)
+
+        # type 0 -> is not tuple (use in non-tuple mode)
+        # init_value = np.zeros(
+        #     (x_batch.shape[0], self.num_layers * 2 * self.hidden_size)
+        # )
+
+        # type 1 -> wrong
+        # init_c_layer = np.zeros((
+        #     x_batch.shape[0], self.num_layers * self.hidden_size
+        # ))
+        # init_h_layer = np.zeros((
+        #     x_batch.shape[0], self.num_layers * self.hidden_size
+        # ))
+        #
+        # init_value = tf.nn.rnn_cell.LSTMStateTuple(self.c_layer, self.h_layer)
+
+        # type 2
+        init_value = tuple(
+            [
+                tf.nn.rnn_cell.LSTMStateTuple(
+                    np.zeros((x_batch.shape[0], self.hidden_size)),
+                    np.zeros((x_batch.shape[0], self.hidden_size))
+                ) for _ in range(self.num_layers)
+            ]
         )
+
         cost, _ = self.session.run(
             [self.cost, self.train_op],
             feed_dict={
@@ -117,17 +188,40 @@ class LSTM_NN:
 
     def run_step(self, x, init_zero_state=False):
         if init_zero_state:
-            init_value = np.zeros((self.num_layers * 2 * self.hidden_size,))
+            # type 0 -> is not tuple (use in non-tuple mode)
+            # init_value = [np.zeros((self.num_layers * 2 * self.hidden_size,))]
+
+            # type 1 -> wrong
+            # init_value = [
+            #     np.zeros(
+            #         (self.num_layers * self.hidden_size,)),
+            #     np.zeros(
+            #         (self.num_layers * self.hidden_size,))
+            #
+            # ]
+
+            # type 2
+            init_value = tuple(
+                [
+                    tf.nn.rnn_cell.LSTMStateTuple(
+                        np.zeros((1, self.hidden_size)),
+                        np.zeros((1, self.hidden_size))
+                    ) for _ in range(self.num_layers)
+                ]
+            )
+            # x_batch.shape[0] is 1
+
         else:
             init_value = self.lstm_last_state
         out, next_lstm_state = self.session.run(
             [self.final_outputs, self.lstm_new_state],
             feed_dict={
-                self.x_batch: [x],
-                self.lstm_init_value: [init_value]
+                self.x_batch: [x],  # -> x_batch.shape[0] is 1
+                self.lstm_init_value: init_value
             }
         )
-        self.lstm_last_state = next_lstm_state[0]
+        self.lstm_last_state = next_lstm_state#[0]
+
         return out[0][0]  # it shows the next character that is predicted
 
 
@@ -149,7 +243,7 @@ def load_model(check_point_dir):
     return net
 
 
-def train(model, data, mini_batch_size=64, num_train_batches=20000, log_period=100):
+def train(model, data, mini_batch_size=64, num_train_batches=20000, check_point_period=100):
     print("'''TRAINING started'''")
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -184,12 +278,12 @@ def train(model, data, mini_batch_size=64, num_train_batches=20000, log_period=1
 
         print("     ---whole train iteration: {}    mini batch iteration: {}".format(whole_train_iter, mini_batch_iter))
 
-        if train_iter % log_period == 0:
+        if train_iter % check_point_period == 0:
             new_time = time.time()
             diff = new_time - last_time
             last_time = new_time
             print("train iteration: {}  loss: {}  speed: {} batches / s".format(
-                whole_train_iter, batch_cost, 100 / diff
+                whole_train_iter, batch_cost, check_point_period / diff
             ))
             saver.save(sess, check_point)
             print('saved in this path: ', check_point)
@@ -199,8 +293,6 @@ def train(model, data, mini_batch_size=64, num_train_batches=20000, log_period=1
             mini_batch_iter -= batch_size
             whole_train_iter += 1
 
-
-# TODO: change state to be a tuple
 
 def predict(prefix, model, generate_len=100):
     prefix = prefix.lower()
@@ -233,7 +325,7 @@ if __name__ == '__main__':
 
     data = load_data('../datasets/shakespeare -all.txt', CHAR_NUM_OF_SENTENCE)
 
-    test = False
+    test = True
     if not test:
         model = LSTM_NN(sess, saver_directory)
         train(model, data)
