@@ -1,4 +1,4 @@
-# RNN_Language_Model
+# RNN Language Model
 Character sequence prediction using simple RNN (Recurrent Neural Networks) or LSTM (Long Short-Term Memory)
 
 ## Why LSTM ?
